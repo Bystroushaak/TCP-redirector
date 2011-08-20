@@ -13,7 +13,40 @@ void printHelp(string pname){
 }
 
 void tcp_redirector(ushort lport, string rhost, ushort rport){
+	// bind local server
+	Socket listener = new TcpSocket();
+	try{
+		listener.blocking = false;
+		listener.bind(new InternetAddress(lport));
+		listener.listen(10);
+		writef("Listening on port ", lport, ".");
+	}catch(Exception e){
+		stderr.writeln("Can't bind local socket on port '", lport, "'!");
+		throw e;
+	}
 	
+	// remote server
+	Socket remote = new TcpSocket(AddressFamily.INET);
+	
+	Socket local;
+	int lreaded, rreaded;
+	ubyte[1024] lbuff, rbuff;
+	while(1){
+		local = listener.accept();
+		remote.connect(new InternetAddress(rhost, rport));
+		while((lreaded = local.receive(lbuff)) > 0 || (rreaded = remote.receive(rbuff)) > 0){
+			if (lreaded > 0){
+				remote.send(lbuff[0 .. lreaded - 1]);
+				lbuff.clear();
+			}
+			if (rreaded > 0){
+				local.send(rbuff[0 .. rreaded - 1]);
+				rbuff.clear();
+			}
+		}
+		remote.close();
+		local.close();
+	}
 }
 
 void udp_redirector(ushort lport, string rhost, ushort rport){
