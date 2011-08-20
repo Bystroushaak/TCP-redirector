@@ -1,8 +1,21 @@
+/**
+ * Simple TCP redirector in D.
+ * 
+ * Author: 
+ *    Bystroushaak
+ * Date:
+ *    21.08.2011
+ * Version:
+ *    1.0.0
+*/ 
+
 import std.stdio;
 import std.string;
 
 import std.socket;
 import std.socketstream;
+
+const uint BUFF_SIZE = 1024;
 
 ///
 void printHelp(string pname){
@@ -12,6 +25,38 @@ void printHelp(string pname){
 	);
 }
 
+/// 
+struct Sockpair{
+	Socket local;
+	Socket remote;
+}
+
+/**
+ * Remove item at selected index from array. 
+ * 
+ * Personaly, I think that this is most usefull piece of code in this program :D 
+*/ 
+T[] remove(T)(T array[], int index){
+	T[] oarray;
+	
+	if (array.length == 0)
+		return array;
+	
+	if (array.length == 1)
+		return oarray;
+	
+	if (index == array.length - 1 && array.length > 1)
+		return array[0 .. $ - 1];
+	
+	if (index == 0 && array.length > 1)
+		return array[1 .. $];
+	
+	oarray ~= array[0 .. index];
+	oarray ~= array[index + 1 .. $];
+	
+	return oarray;
+}
+
 void tcp_redirector(ushort lport, string rhost, ushort rport){
 	// bind local server
 	Socket listener = new TcpSocket();
@@ -19,37 +64,63 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 		listener.blocking = false;
 		listener.bind(new InternetAddress(lport));
 		listener.listen(10);
-		writef("Listening on port ", lport, ".");
+		writeln("Listening on port ", lport, ".");
 	}catch(Exception e){
 		stderr.writeln("Can't bind local socket on port '", lport, "'!");
 		throw e;
 	}
 	
-	// remote server
-	Socket remote = new TcpSocket(AddressFamily.INET);
+	// redirect
+	Sockpair[] connections;
+	Sockpair connection, c;
+	Socket tmp;
 	
-	Socket local;
 	int lreaded, rreaded;
-	ubyte[1024] lbuff, rbuff;
-	while(1){
-		local = listener.accept();
-		remote.connect(new InternetAddress(rhost, rport));
-		while((lreaded = local.receive(lbuff)) > 0 || (rreaded = remote.receive(rbuff)) > 0){
+	ubyte[BUFF_SIZE] lbuff, rbuff;
+	
+	while(true){
+		// try accept incoming connection (in nonblock mode accept() throws exception when there is none)
+		try{
+			tmp = listener.accept();
+
+			// create new socket pair
+			connection.local = tmp;
+			
+			connection.remote = new TcpSocket(AddressFamily.INET);
+			connection.remote.connect(new InternetAddress(rhost, rport)); // connect to server
+			
+			connection.local.blocking = false;
+			connection.remote.blocking = false;
+			
+			connections ~= connection;
+		}catch(SocketAcceptException e){
+		}
+		
+		// redirect data between all channels
+		for (int i = connections.length - 1; i >= 0; i--){
+			c = connections[i];
+			
+			lreaded = c.local.receive(lbuff);
+			rreaded = c.remote.receive(rbuff);
+			
 			if (lreaded > 0){
-				remote.send(lbuff[0 .. lreaded - 1]);
+				c.remote.send(lbuff);
 				lbuff.clear();
 			}
 			if (rreaded > 0){
-				local.send(rbuff[0 .. rreaded - 1]);
+				c.local.send(rbuff);
 				rbuff.clear();
 			}
+			
+			if (lreaded == 0 || rreaded == 0){
+				c.remote.close();
+				c.local.close();
+				connections = connections.remove(i);
+			}
 		}
-		remote.close();
-		local.close();
+		
+		core.thread.Thread.sleep(dur!("msecs")(20));
 	}
-}
-
-void udp_redirector(ushort lport, string rhost, ushort rport){
 }
 
 int main(string[] args){
@@ -86,7 +157,16 @@ int main(string[] args){
 	}
 	host = args[2].split(":")[0];
 	
+	// test if remote address is valid:
+	Socket test = new TcpSocket(AddressFamily.INET);
+	try
+		test.connect(new InternetAddress(host, rport)); // connect to server
+	catch(Exception e){
+		stderr.writeln("Can't connect to '", host, ":", rport, "'!");
+		return 1;
+	}
 	
+	tcp_redirector(lport, host, rport);
 	
 	return 0;
 }
