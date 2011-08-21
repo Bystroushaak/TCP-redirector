@@ -15,9 +15,15 @@ import std.string;
 import std.socket;
 import std.socketstream;
 
-const uint BUFF_SIZE = 1024;
+
 
 ///
+const uint BUFF_SIZE = 1024;
+
+
+
+
+/// No comment..
 void printHelp(string pname){
 	stderr.writeln(
 		"Usage:\n" ~
@@ -25,11 +31,13 @@ void printHelp(string pname){
 	);
 }
 
-/// 
+
+/// Container for couple localsocket:remotesocket
 struct Sockpair{
 	Socket local;
 	Socket remote;
 }
+
 
 /**
  * Remove item at selected index from array. 
@@ -42,12 +50,15 @@ T[] remove(T)(T array[], int index){
 	if (array.length == 0)
 		return array;
 	
+	// if array contain olny one item, return blank array
 	if (array.length == 1)
 		return oarray;
 	
+	// last index
 	if (index == array.length - 1 && array.length > 1)
 		return array[0 .. $ - 1];
 	
+	// first indext
 	if (index == 0 && array.length > 1)
 		return array[1 .. $];
 	
@@ -57,6 +68,10 @@ T[] remove(T)(T array[], int index){
 	return oarray;
 }
 
+
+/**
+ * Redirects local port into port at remote server.
+*/ 
 void tcp_redirector(ushort lport, string rhost, ushort rport){
 	// bind local server
 	Socket listener = new TcpSocket();
@@ -73,24 +88,43 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 	// redirect
 	Sockpair[] connections;
 	Sockpair connection, c;
-	Socket tmp;
 	
-	int lreaded, rreaded;
+	// Container for sockets
+	SocketSet check_this_baby = new SocketSet();
+	
+	// buffers
+	int lreaded, rreaded, chk;
 	ubyte[BUFF_SIZE] lbuff, rbuff;
 	
-	while(true){
+	for(;; check_this_baby.reset()){
+		// food for Socket.select (it have to be reset and filled after every select() call)
+		check_this_baby.add(listener);
+		foreach(tmp; connections){
+			check_this_baby.add(tmp.local);
+			check_this_baby.add(tmp.remote);
+		}
+		
+		// breaker - this function wait until some socket changes
+		chk = Socket.select(check_this_baby, check_this_baby, check_this_baby); 
+		
 		// try accept incoming connection (in nonblock mode accept() throws exception when there is none)
 		try{
-			tmp = listener.accept();
-
 			// create new socket pair
-			connection.local = tmp;
+			connection.local = listener.accept(); // connect to localhost
 			
 			connection.remote = new TcpSocket(AddressFamily.INET);
 			connection.remote.connect(new InternetAddress(rhost, rport)); // connect to server
 			
-			connection.local.blocking = false;
+			// we want nonblocking socket
+			connection.local.blocking  = false;
 			connection.remote.blocking = false;
+			
+			//~ core.thread.Thread.sleep( dur!("msecs")( 5 ) );
+			
+			if (!check_this_baby.isSet(connection.local))
+				check_this_baby.add(connection.local);
+			if (!check_this_baby.isSet(connection.remote))
+				check_this_baby.add(connection.remote);
 			
 			connections ~= connection;
 		}catch(SocketAcceptException e){
@@ -100,28 +134,36 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 		for (int i = connections.length - 1; i >= 0; i--){
 			c = connections[i];
 			
+			// read data
 			lreaded = c.local.receive(lbuff);
 			rreaded = c.remote.receive(rbuff);
 			
-			if (lreaded > 0){
+			// send data
+			if (lreaded != 0 && lreaded != Socket.ERROR){
 				c.remote.send(lbuff);
 				lbuff.clear();
 			}
-			if (rreaded > 0){
+			if (rreaded != 0 && rreaded != Socket.ERROR){
 				c.local.send(rbuff);
 				rbuff.clear();
 			}
 			
+			// if one of connections closed, close both
 			if (lreaded == 0 || rreaded == 0){
+				check_this_baby.remove(c.remote);
+				check_this_baby.remove(c.local);
+				
 				c.remote.close();
 				c.local.close();
+				
 				connections = connections.remove(i);
 			}
 		}
 		
-		core.thread.Thread.sleep(dur!("msecs")(20));
+		
 	}
 }
+
 
 int main(string[] args){
 	ushort lport, rport;
@@ -164,9 +206,16 @@ int main(string[] args){
 	catch(Exception e){
 		stderr.writeln("Can't connect to '", host, ":", rport, "'!");
 		return 1;
+	}finally{
+		test.close();
 	}
 	
-	tcp_redirector(lport, host, rport);
+	// do redirection
+	try{
+		tcp_redirector(lport, host, rport);
+	}catch(SocketException e){
+		return 1;
+	}
 	
 	return 0;
 }
