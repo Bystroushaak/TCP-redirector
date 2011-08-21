@@ -1,0 +1,7 @@
+TCP redirector written in D. Nothing more, nothing less.
+
+Usage:
+./redirector L_PORT RHOST:RPORT
+
+Example:
+./redirector 2222 kitakitsune.org:80

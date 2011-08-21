@@ -161,8 +161,6 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 				connections = connections.remove(i);
 			}
 		}
-		
-		
 	}
 }
 
