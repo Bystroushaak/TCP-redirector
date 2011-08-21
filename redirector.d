@@ -44,7 +44,7 @@ struct Sockpair{
 /**
  * Remove item at selected index from array. 
  * 
- * Personaly, I think that this is most usefull piece of code in this program :D 
+ * Personally, I think that this is most useful piece of code in this program :D 
 */ 
 T[] remove(T)(T array[], int index){
 	T[] oarray;
@@ -72,7 +72,7 @@ T[] remove(T)(T array[], int index){
 
 
 /**
- * Redirects local port into port at remote server.
+ * Redirect local port into port at remote server.
 */ 
 void tcp_redirector(ushort lport, string rhost, ushort rport){
 	// bind local server
