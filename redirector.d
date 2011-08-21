@@ -6,7 +6,7 @@
  * Date:
  *    21.08.2011
  * Version:
- *    1.0.0
+ *    1.1.0
  * Copyright:
  *    This work is licensed under a CC BY (http://creativecommons.org/licenses/by/3.0/)
 */ 
@@ -28,8 +28,14 @@ const uint BUFF_SIZE = 1024;
 /// No comment..
 void printHelp(string pname){
 	stderr.writeln(
+		"TCP redirector by Bystroushaak (bystrousak@kitakitsune.org)\n\n"
 		"Usage:\n" ~
-		pname ~ " L_PORT RHOST:RPORT\n"
+		pname ~ " [-s, --sniff] L_PORT RHOST:RPORT\n"
+		"\n"
+		"\t-s --sniff\n"
+		"\t\tPrint communication to stdin.\n"
+		"\n"
+		"This work is licensed under a CC BY http://creativecommons.org/licenses/by/3.0/"
 	);
 }
 
@@ -74,7 +80,7 @@ T[] remove(T)(T array[], int index){
 /**
  * Redirect local port into port at remote server.
 */ 
-void tcp_redirector(ushort lport, string rhost, ushort rport){
+void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = false){
 	// bind local server
 	Socket listener = new TcpSocket();
 	try{
@@ -87,7 +93,6 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 		throw e;
 	}
 	
-	// redirect
 	Sockpair[] connections;
 	Sockpair connection, c;
 	
@@ -121,13 +126,6 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 			connection.local.blocking  = false;
 			connection.remote.blocking = false;
 			
-			//~ core.thread.Thread.sleep( dur!("msecs")( 5 ) );
-			
-			if (!check_this_baby.isSet(connection.local))
-				check_this_baby.add(connection.local);
-			if (!check_this_baby.isSet(connection.remote))
-				check_this_baby.add(connection.remote);
-			
 			connections ~= connection;
 		}catch(SocketAcceptException e){
 		}
@@ -142,11 +140,15 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 			
 			// send data
 			if (lreaded != 0 && lreaded != Socket.ERROR){
-				c.remote.send(lbuff);
+				if (show_comm)
+					writeln(std.conv.to!(string)(cast(char[]) lbuff[0 .. lreaded]));
+				c.remote.send(lbuff[0 .. lreaded]);
 				lbuff.clear();
 			}
 			if (rreaded != 0 && rreaded != Socket.ERROR){
-				c.local.send(rbuff);
+				if (show_comm)
+					writeln(std.conv.to!(string)(cast(char[]) rbuff[0 .. rreaded]));
+				c.local.send(rbuff[0 .. rreaded]);
 				rbuff.clear();
 			}
 			
@@ -168,7 +170,25 @@ void tcp_redirector(ushort lport, string rhost, ushort rport){
 int main(string[] args){
 	ushort lport, rport;
 	string host;
+	bool show_comm = false;
 	
+	// help?
+	foreach(a; args)
+		if (a == "-h" || a == "--help"){
+			printHelp(args[0]);
+			return 0;
+		}
+	
+	// sniff?
+	for(int i = 0; i < args.length; i++){
+		if (args[i] == "-s" || args[i] == "--sniff"){
+			show_comm = true;
+			args = args.remove(i);
+			break;
+		}
+	}
+	
+	// check for argument length
 	if (args.length != 3){
 		stderr.writeln("Bad number of arguments!\n");
 		printHelp(args[0]);
@@ -212,7 +232,7 @@ int main(string[] args){
 	
 	// do redirection
 	try{
-		tcp_redirector(lport, host, rport);
+		tcp_redirector(lport, host, rport, show_comm);
 	}catch(SocketException e){
 		return 1;
 	}
