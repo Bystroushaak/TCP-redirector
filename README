@@ -1,7 +1,10 @@
 TCP redirector written in D. Nothing more, nothing less.
 
 Usage:
-./redirector L_PORT RHOST:RPORT
+./redirector [-s, --sniff] L_PORT RHOST:RPORT
+
+	-s --sniff
+		Print communication to stdin.
 
 Example:
 ./redirector 2222 kitakitsune.org:80
