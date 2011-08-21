@@ -7,6 +7,8 @@
  *    21.08.2011
  * Version:
  *    1.0.0
+ * Copyright:
+ *    This work is licensed under a CC BY (http://creativecommons.org/licenses/by/3.0/)
 */ 
 
 import std.stdio;
