@@ -4,9 +4,9 @@
  * Author: 
  *    Bystroushaak
  * Date:
- *    21.08.2011
+ *    22.08.2011
  * Version:
- *    1.1.0
+ *    1.1.1
  * Copyright:
  *    This work is licensed under a CC BY (http://creativecommons.org/licenses/by/3.0/)
 */ 
@@ -55,6 +55,7 @@ struct Sockpair{
 T[] remove(T)(T array[], int index){
 	T[] oarray;
 	
+	// if blank, instead of exception return blank array
 	if (array.length == 0)
 		return array;
 	
@@ -66,10 +67,11 @@ T[] remove(T)(T array[], int index){
 	if (index == array.length - 1 && array.length > 1)
 		return array[0 .. $ - 1];
 	
-	// first indext
+	// first index
 	if (index == 0 && array.length > 1)
 		return array[1 .. $];
 	
+	// others
 	oarray ~= array[0 .. index];
 	oarray ~= array[index + 1 .. $];
 	
@@ -100,7 +102,7 @@ void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = f
 	SocketSet check_this_baby = new SocketSet();
 	
 	// buffers
-	int lreaded, rreaded, chk;
+	int lreaded, rreaded;
 	ubyte[BUFF_SIZE] lbuff, rbuff;
 	
 	for(;; check_this_baby.reset()){
@@ -112,7 +114,7 @@ void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = f
 		}
 		
 		// breaker - this function wait until some socket changes
-		chk = Socket.select(check_this_baby, check_this_baby, check_this_baby); 
+		Socket.select(check_this_baby, check_this_baby, check_this_baby); 
 		
 		// try accept incoming connection (in nonblock mode accept() throws exception when there is none)
 		try{
