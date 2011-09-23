@@ -4,9 +4,9 @@
  * Author: 
  *    Bystroushaak
  * Date:
- *    22.08.2011
+ *    24.09.2011
  * Version:
- *    1.1.1
+ *    1.2.0
  * Copyright:
  *    This work is licensed under a CC BY (http://creativecommons.org/licenses/by/3.0/)
 */ 
@@ -16,7 +16,7 @@ import std.string;
 
 import std.socket;
 import std.socketstream;
-
+import std.algorithm : remove;
 
 
 ///
@@ -48,38 +48,6 @@ struct Sockpair{
 
 
 /**
- * Remove item at selected index from array. 
- * 
- * Personally, I think that this is most useful piece of code in this program :D 
-*/ 
-T[] remove(T)(T array[], int index){
-	T[] oarray;
-	
-	// if blank, instead of exception return blank array
-	if (array.length == 0)
-		return array;
-	
-	// if array contain olny one item, return blank array
-	if (array.length == 1)
-		return oarray;
-	
-	// last index
-	if (index == array.length - 1 && array.length > 1)
-		return array[0 .. $ - 1];
-	
-	// first index
-	if (index == 0 && array.length > 1)
-		return array[1 .. $];
-	
-	// others
-	oarray ~= array[0 .. index];
-	oarray ~= array[index + 1 .. $];
-	
-	return oarray;
-}
-
-
-/**
  * Redirect local port into port at remote server.
 */ 
 void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = false){
@@ -103,7 +71,7 @@ void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = f
 	
 	// buffers
 	int lreaded, rreaded;
-	ubyte[BUFF_SIZE] lbuff, rbuff;
+	char[BUFF_SIZE] lbuff, rbuff;
 	
 	for(;; check_this_baby.reset()){
 		// food for Socket.select (it have to be reset and filled after every select() call)
@@ -114,10 +82,9 @@ void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = f
 		}
 		
 		// breaker - this function wait until some socket changes
-		Socket.select(check_this_baby, check_this_baby, check_this_baby); 
+		Socket.select(check_this_baby, null, null); 
 		
-		// try accept incoming connection (in nonblock mode accept() throws exception when there is none)
-		try{
+		if (check_this_baby.isSet(listener)){
 			// create new socket pair
 			connection.local = listener.accept(); // connect to localhost
 			
@@ -129,12 +96,14 @@ void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = f
 			connection.remote.blocking = false;
 			
 			connections ~= connection;
-		}catch(SocketAcceptException e){
 		}
 		
 		// redirect data between all channels
 		for (int i = connections.length - 1; i >= 0; i--){
 			c = connections[i];
+			
+			if (!check_this_baby.isSet(c.local) && !check_this_baby.isSet(c.remote)) 
+				continue;
 			
 			// read data
 			lreaded = c.local.receive(lbuff);
@@ -143,13 +112,13 @@ void tcp_redirector(ushort lport, string rhost, ushort rport, bool show_comm = f
 			// send data
 			if (lreaded != 0 && lreaded != Socket.ERROR){
 				if (show_comm)
-					writeln(std.conv.to!(string)(cast(char[]) lbuff[0 .. lreaded]));
+					writeln(std.conv.to!(string)(lbuff[0 .. lreaded]));
 				c.remote.send(lbuff[0 .. lreaded]);
 				lbuff.clear();
 			}
 			if (rreaded != 0 && rreaded != Socket.ERROR){
 				if (show_comm)
-					writeln(std.conv.to!(string)(cast(char[]) rbuff[0 .. rreaded]));
+					writeln(std.conv.to!(string)(rbuff[0 .. rreaded]));
 				c.local.send(rbuff[0 .. rreaded]);
 				rbuff.clear();
 			}
